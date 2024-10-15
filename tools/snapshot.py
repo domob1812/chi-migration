@@ -8,17 +8,22 @@ and also provide information on additional addresses that they need to
 claim their corresponding outputs.
 """
 
+from eth_account import Account
+from eth_account.messages import encode_structured_data
 from web3 import Web3
 
-from bip_utils import P2PKHAddrDecoder, P2WPKHAddrDecoder
+from bip_utils import P2PKHAddrDecoder, P2WPKHAddrDecoder, WifDecoder
+import coincurve
 
 import csv
+import hashlib
 import multiprocessing
 
 
 # Parameters for Xaya addresses.
 ADDRVER = b"\x1c"
 HRP = "chi"
+WIFVER = b"\x82"
 
 # Number of processes to use for building the UTXO set.  None means
 # the number of processors in the system.
@@ -222,3 +227,66 @@ class UtxoSet:
       index >>= 1
 
     return proof
+
+  def signClaim (self, index, wif, recipient, verifyingContract, chainId):
+    """
+    Sign the claim message for the output at the given index with the
+    private key passed in (as WIF) and for sending the claimed WCHI
+    to the given recipient address.  For the EIP712 encoding, also the
+    address of the claim contract and the chain ID are required.
+
+    This method returns the pubkey point coordinates (x and y)
+    and the signature bytes, as required to make the claim.
+    """
+
+    privKeyBytes, _ = WifDecoder.Decode (wif, net_ver=WIFVER)
+    acc = Account.from_key (privKeyBytes)
+    pubkey = coincurve.PublicKey.from_secret (privKeyBytes)
+
+    o = self.outputs[index]
+
+    # Check if the pubkey in either compressed or uncompressed form
+    # yields the output's pubkeyhash.
+    found = False
+    for compressed in [True, False]:
+      serialised = pubkey.format (compressed)
+      pkhash = hashlib.sha256 (serialised).digest ()
+      pkhash = hashlib.new ("ripemd160", pkhash).digest ()
+      if pkhash == o["pubkeyhash"]:
+        found = True
+        break
+    if not found:
+      raise RuntimeError ("private key does not match output pubkeyhash")
+
+    msg = {
+      "domain": {
+        "name": "ChiMigration",
+        "version": "1",
+        "chainId": chainId,
+        "verifyingContract": verifyingContract,
+      },
+      "primaryType": "PubKeyClaim",
+      "types": {
+        "EIP712Domain": [
+          {"name": "name", "type": "string"},
+          {"name": "version", "type": "string"},
+          {"name": "chainId", "type": "uint256"},
+          {"name": "verifyingContract", "type": "address"},
+        ],
+        "PubKeyClaim": [
+          {"name": "txid", "type": "bytes32"},
+          {"name": "vout", "type": "uint256"},
+          {"name": "recipient", "type": "address"},
+        ],
+      },
+      "message": {
+        "txid": o["txid"],
+        "vout": o["vout"],
+        "recipient": recipient,
+      },
+    }
+    encoded = encode_structured_data (msg)
+    signed = acc.sign_message (encoded)
+
+    x, y = pubkey.point ()
+    return x, y, signed.signature
