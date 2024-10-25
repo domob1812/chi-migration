@@ -5,15 +5,16 @@
 This script signs the claim for a particular pubkeyhash output in the snapshot.
 """
 
-import snapshot
-
 from web3 import Web3
 
 import argparse
+import pickle
 import sys
 
 
 parser = argparse.ArgumentParser ()
+parser.add_argument ("--load", required=True,
+                     help="Load the UTXO Merkle tree from this file")
 parser.add_argument ("--txid", required=True,
                      help="TXID of the output to look up")
 parser.add_argument ("--vout", type=int, required=True,
@@ -28,7 +29,8 @@ parser.add_argument ("--chainid", type=int, required=True,
                      help="EVM chain ID for the EIP712 signature")
 args = parser.parse_args ()
 
-utxos = snapshot.UtxoSet (sys.stdin)
+with open (args.load, "rb") as f:
+  utxos = pickle.load (f)
 
 txid = Web3.to_bytes (hexstr=args.txid)
 ind = utxos.lookupOutput (txid, args.vout)
