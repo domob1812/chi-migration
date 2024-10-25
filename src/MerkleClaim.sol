@@ -131,9 +131,9 @@ contract MerkleClaim
     require (recipient != address (0), "invalid recipient address");
     checkClaim (utxo, merkleProof);
 
+    claimedOutputs[utxoIdentifier (utxo)] = recipient;
     require (token.transfer (recipient, utxo.amount),
              "failed to transfer token for the claim");
-    claimedOutputs[utxoIdentifier (utxo)] = recipient;
     emit Claimed (utxo.txid, utxo.vout, utxo.amount, recipient);
   }
 
