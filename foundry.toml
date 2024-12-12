@@ -4,3 +4,6 @@ out = "out"
 libs = ["lib"]
 optimizer = true
 optimizer_runs = 1_000_000
+
+[etherscan]
+polygon = { key = "${APIKEY}" }
