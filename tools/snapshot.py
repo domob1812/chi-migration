@@ -1,4 +1,4 @@
-# Copyright (C) 2024 The Xaya developers
+# Copyright (C) 2024-2025 The Xaya developers
 
 """
 This package contains the basic functionality to process the UTXO dump of
@@ -9,7 +9,7 @@ claim their corresponding outputs.
 """
 
 from eth_account import Account
-from eth_account.messages import encode_structured_data
+from eth_account.messages import encode_typed_data
 from web3 import Web3
 
 from bip_utils import P2PKHAddrDecoder, P2WPKHAddrDecoder, WifDecoder
@@ -285,7 +285,7 @@ class UtxoSet:
         "recipient": recipient,
       },
     }
-    encoded = encode_structured_data (msg)
+    encoded = encode_typed_data (full_message=msg)
     signed = acc.sign_message (encoded)
 
     x, y = pubkey.point ()

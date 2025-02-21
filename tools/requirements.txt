@@ -1,3 +1,4 @@
 bip-utils==2.9.3
 coincurve==20.0.0
+eth_account==0.13.5
 web3==7.3.0
