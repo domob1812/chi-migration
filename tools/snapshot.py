@@ -12,11 +12,11 @@ from eth_account import Account
 from eth_account.messages import encode_typed_data
 from web3 import Web3
 
+from Crypto import Hash
 from bip_utils import P2PKHAddrDecoder, P2WPKHAddrDecoder, WifDecoder
 import coincurve
 
 import csv
-import hashlib
 import multiprocessing
 
 
@@ -250,8 +250,8 @@ class UtxoSet:
     found = False
     for compressed in [True, False]:
       serialised = pubkey.format (compressed)
-      pkhash = hashlib.sha256 (serialised).digest ()
-      pkhash = hashlib.new ("ripemd160", pkhash).digest ()
+      pkhash = Hash.SHA256.new (serialised).digest ()
+      pkhash = Hash.RIPEMD160.new (pkhash).digest ()
       if pkhash == o["pubkeyhash"]:
         found = True
         break
