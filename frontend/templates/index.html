@@ -1,0 +1,302 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>WCHI Token Airdrop Claims</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/htmx.org@1.9.10"></script>
+    <style>
+        .txid-mono {
+            font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
+            word-break: break-all;
+        }
+    </style>
+</head>
+<body class="bg-gray-100 min-h-screen flex items-center justify-center p-4">
+    <div class="w-full max-w-2xl">
+        <div class="bg-white shadow-md rounded-lg">
+            <div class="p-6">
+                <h1 class="text-2xl font-bold text-center mb-6">WCHI Token Airdrop Claims</h1>
+                
+                <!-- Address Input Form -->
+                <form method="POST" class="space-y-4">
+                    <input 
+                        type="text" 
+                        name="address" 
+                        placeholder="Enter Xaya Address" 
+                        value="{{ address }}"
+                        class="w-full px-3 py-2 border rounded-md"
+                    >
+                    <button 
+                        type="submit" 
+                        class="w-full bg-blue-500 text-white py-2 rounded-md hover:bg-blue-600 transition"
+                    >
+                        Check Availability
+                    </button>
+                </form>
+
+                <!-- No Claims Found Message -->
+                {% if no_claims_found %}
+                <div class="mt-4 text-center text-red-600 font-medium">
+                    No claims found for this address.
+                </div>
+                {% endif %}
+
+                <!-- Claims List -->
+                {% if claims %}
+                <div class="mt-6">
+                    <h2 class="text-lg font-semibold mb-4">Available Claims</h2>
+                    <div class="space-y-2">
+                        {% for claim in claims %}
+                        <div 
+                            class="border rounded-md p-4 {{ 'cursor-pointer hover:bg-gray-50 transition-colors claim-item bg-white' if not claim.get('claimed', False) else 'bg-gray-200 opacity-50 cursor-not-allowed' }}"
+                            {% if not claim.get('claimed', False) %}
+                            data-txid="{{ claim.txid.hex() }}"
+                            data-vout="{{ claim.vout }}"
+                            data-amount="{{ "%.8f"|format(claim.amount / 100000000) }}"
+                            {% endif %}
+                        >
+                            <div class="flex justify-between">
+                                <div class="w-full">
+                                    <p class="{{ 'text-xl font-bold text-green-600' if not claim.get('claimed', False) else 'text-xl font-bold text-gray-500' }}">
+                                        {{ "%.8f"|format(claim.amount / 100000000) }} WCHI
+                                    </p>
+                                    <p class="text-sm {{ 'text-gray-600' if not claim.get('claimed', False) else 'text-gray-500' }}">
+                                        <span class="txid-mono">{{ claim.txid.hex() }}:{{ claim.vout }}</span>
+                                    </p>
+                                    {% if claim.get('claimed', False) %}
+                                    <p class="text-sm text-red-500 mt-2">
+                                        Already Claimed
+                                    </p>
+                                    {% endif %}
+                                </div>
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                    
+                    <!-- Updated Totals Display -->
+                    <div class="mt-6 border-t pt-4 space-y-2">
+                        <!-- Claimable Total (Most Prominent) -->
+                        <div class="text-right">
+                            <span class="font-bold text-xl text-green-600">
+                                Claimable: {{ "%.8f"|format(total_claimable / 100000000) }} WCHI
+                            </span>
+                        </div>
+                        
+                        <!-- Already Claimed Total -->
+                        <div class="text-right text-sm text-gray-600">
+                            Already Claimed: {{ "%.8f"|format(total_claimed / 100000000) }} WCHI
+                        </div>
+                        
+                        <!-- All Claims Total -->
+                        <div class="text-right text-sm text-gray-600">
+                            Total (All Claims): {{ "%.8f"|format(total_all / 100000000) }} WCHI
+                        </div>
+                    </div>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+
+        <!-- Claim Modal -->
+        <div 
+            id="claimModal" 
+            class="fixed inset-0 bg-black bg-opacity-50 hidden items-center justify-center z-50"
+        >
+            <div class="bg-white rounded-lg p-6 w-full max-w-2xl relative">
+                <button 
+                    onclick="closeClaimModal()"
+                    class="absolute top-4 right-4 text-gray-600 hover:text-gray-900"
+                >
+                    ✕
+                </button>
+
+                <h2 class="text-xl font-bold mb-4">Claim Details</h2>
+                
+                <!-- Claim Information Display -->
+                <div id="claimInfo" class="mb-4">
+                    <p class="text-lg">
+                        <span class="font-bold text-green-600">
+                            <span id="claimAmount"></span> WCHI
+                        </span>
+                    </p>
+                    <p class="text-sm text-gray-600">
+                        <span id="claimTxid" class="txid-mono"></span>:<span id="claimVout"></span>
+                    </p>
+                </div>
+
+                <form id="claimForm" hx-post="/execute-claim" hx-target="#claimResult">
+                    <input type="hidden" name="claim_txid" id="formClaimTxid">
+                    <input type="hidden" name="wallet_address" id="formWalletAddress">
+                    
+                    <div class="space-y-4">
+                        <!-- Private Key Input -->
+                        <div>
+                            <label class="block mb-2 text-sm font-medium">
+                                Private Key (WIF Format)
+                            </label>
+                            <input 
+                                type="text" 
+                                name="private_key"
+                                id="privateKeyInput"
+                                placeholder="Enter Private Key"
+                                class="w-full px-3 py-2 border rounded-md"
+                                required
+                            >
+                        </div>
+
+                        <!-- Wallet Connection -->
+                        <button 
+                            type="button" 
+                            id="connectWalletBtn"
+                            onclick="connectMetaMask()"
+                            class="w-full bg-blue-500 text-white py-2 rounded-md"
+                        >
+                            Connect MetaMask Wallet
+                        </button>
+
+                        <!-- Connected Wallet Address (Initially Hidden) -->
+                        <div 
+                            id="walletAddressDisplay" 
+                            class="text-sm text-gray-600 text-center hidden"
+                        >
+                            Receiving WCHI tokens to: <span id="walletAddress"></span>
+                        </div>
+
+                        <!-- Claim Button -->
+                        <button 
+                            type="submit" 
+                            id="executeClaimBtn"
+                            disabled 
+                            class="w-full bg-green-500 text-white py-2 rounded-md disabled:opacity-50"
+                        >
+                            Execute Claim
+                        </button>
+
+                        <!-- Result Display -->
+                        <div id="claimResult" class="mt-4"></div>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Global variable to track wallet connection state
+        let walletConnected = false;
+
+        // Add click event listeners to claim items
+        document.addEventListener('DOMContentLoaded', () => {
+            document.querySelectorAll('.claim-item').forEach(item => {
+                item.addEventListener('click', function() {
+                    // Skip if the claim is already claimed
+                    if (this.classList.contains('cursor-not-allowed')) return;
+
+                    // Open modal and populate with claim details
+                    const txid = this.getAttribute('data-txid');
+                    const vout = this.getAttribute('data-vout');
+                    const amount = this.getAttribute('data-amount');
+
+                    // Update modal content
+                    document.getElementById('claimAmount').textContent = amount;
+                    document.getElementById('claimTxid').textContent = txid;
+                    document.getElementById('claimVout').textContent = vout;
+                    document.getElementById('formClaimTxid').value = txid;
+
+                    // Show modal
+                    const claimModal = document.getElementById('claimModal');
+                    claimModal.classList.remove('hidden');
+                    claimModal.classList.add('flex');
+
+                    // Reset wallet connection state
+                    resetWalletConnection();
+                });
+            });
+
+            // Private key input listener
+            document.getElementById('privateKeyInput').addEventListener('input', checkClaimButtonState);
+        });
+
+        // MetaMask Wallet Connection
+        async function connectMetaMask() {
+            // Check if MetaMask is installed
+            if (typeof window.ethereum !== 'undefined') {
+                try {
+                    // Request account access
+                    const accounts = await window.ethereum.request({ 
+                        method: 'eth_requestAccounts' 
+                    });
+
+                    // Get the first account
+                    const walletAddress = accounts[0];
+
+                    // Update UI
+                    walletConnected = true;
+                    document.getElementById('connectWalletBtn').textContent = 'Wallet Connected';
+                    document.getElementById('connectWalletBtn').disabled = true;
+                    
+                    // Show wallet address
+                    const walletDisplay = document.getElementById('walletAddressDisplay');
+                    const walletAddressSpan = document.getElementById('walletAddress');
+                    const formWalletAddress = document.getElementById('formWalletAddress');
+                    
+                    walletAddressSpan.textContent = walletAddress;
+                    formWalletAddress.value = walletAddress;
+                    walletDisplay.classList.remove('hidden');
+
+                    // Enable claim button if private key is entered
+                    checkClaimButtonState();
+
+                } catch (error) {
+                    console.error('Failed to connect wallet:', error);
+                    alert('Failed to connect MetaMask. Please make sure it is installed and unlocked.');
+                }
+            } else {
+                // MetaMask not found
+                alert('MetaMask is not installed. Please install MetaMask to continue.');
+            }
+        }
+
+        // Close Modal Function
+        function closeClaimModal() {
+            const claimModal = document.getElementById('claimModal');
+            claimModal.classList.add('hidden');
+            claimModal.classList.remove('flex');
+            resetWalletConnection();
+        }
+
+        // Reset Wallet Connection
+        function resetWalletConnection() {
+            walletConnected = false;
+            document.getElementById('connectWalletBtn').textContent = 'Connect MetaMask Wallet';
+            document.getElementById('connectWalletBtn').disabled = false;
+            document.getElementById('walletAddressDisplay').classList.add('hidden');
+            document.getElementById('executeClaimBtn').disabled = true;
+            document.getElementById('formWalletAddress').value = '';
+            document.getElementById('privateKeyInput').value = '';
+        }
+
+        // Check Claim Button State
+        function checkClaimButtonState() {
+            const privateKey = document.getElementById('privateKeyInput').value;
+            const executeClaimBtn = document.getElementById('executeClaimBtn');
+            
+            executeClaimBtn.disabled = !(walletConnected && privateKey.trim() !== '');
+        }
+
+        // Listen for account changes
+        if (typeof window.ethereum !== 'undefined') {
+            window.ethereum.on('accountsChanged', (accounts) => {
+                if (accounts.length === 0) {
+                    // User disconnected all accounts
+                    resetWalletConnection();
+                } else {
+                    // Reconnect with the new account
+                    connectMetaMask();
+                }
+            });
+        }
+    </script>
+</body>
+</html>
