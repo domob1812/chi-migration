@@ -3,3 +3,6 @@ coincurve==20.0.0
 eth_account==0.13.5
 pycryptodome
 web3==7.3.0
+
+flask
+python-dotenv
