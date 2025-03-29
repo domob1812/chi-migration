@@ -39,20 +39,21 @@ def processRow (row):
 
   if row["type"] in ["p2pk", "p2pkh"]:
     pkh = P2PKHAddrDecoder.DecodeAddr (row["address"], net_ver=ADDRVER)
-    addr = row["address"]
+    nonstandard = False
   elif row["type"] == "p2wpkh":
     pkh = P2WPKHAddrDecoder.DecodeAddr (row["address"], hrp=HRP)
-    addr = row["address"]
+    nonstandard = False
   else:
     pkh = b"\0" * 20
-    addr = None
+    nonstandard = True
 
   return {
     "txid": Web3.to_bytes (hexstr=row["txid"]),
     "vout": Web3.to_int (text=row["vout"]),
     "amount": Web3.to_int (text=row["amount"]),
     "pubkeyhash": pkh,
-    "address": addr,
+    "address": row["address"],
+    "nonstandard": nonstandard,
   }
 
 
@@ -175,10 +176,9 @@ class UtxoSet:
       if o["txid"] != lastTxid:
         self.indexTxid[o["txid"]] = ind
         lastTxid = o["txid"]
-      if o["address"] is not None:
-        if o["address"] not in self.indexAddress:
-          self.indexAddress[o["address"]] = []
-        self.indexAddress[o["address"]].append (ind)
+      if o["address"] not in self.indexAddress:
+        self.indexAddress[o["address"]] = []
+      self.indexAddress[o["address"]].append (ind)
 
   def lookupOutput (self, txid, vout):
     """

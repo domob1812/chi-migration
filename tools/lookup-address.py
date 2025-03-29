@@ -25,11 +25,17 @@ with open (args.load, "rb") as f:
 ind = utxos.lookupAddress (args.address)
 
 total = 0
+nonstandard = False
 print ("Outputs:")
 for i in ind:
   o = utxos.outputs[i]
+  if o["nonstandard"]:
+    nonstandard = True
   total += o["amount"]
   print ("  %s:%d: %s CHI"
       % (o["txid"].hex (), o["vout"], util.formatChi (o["amount"])))
 
 print ("\nTotal claimable: %s CHI" % util.formatChi (total))
+
+if nonstandard:
+  print ("\nThis output cannot be claimed by signature, only by the Xaya team!")
