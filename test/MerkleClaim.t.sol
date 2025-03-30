@@ -111,9 +111,17 @@ contract MerkleClaimTest is Test
 
   address public constant supply = address (1);
   address public constant alice = address (2);
+  address public constant bob = address (3);
 
   TestToken public wchi;
   TestMerkleClaim public mc;
+
+  constructor ()
+  {
+    vm.label (supply, "supply");
+    vm.label (alice, "alice");
+    vm.label (bob, "bob");
+  }
 
   function setUp () public
   {
@@ -153,11 +161,13 @@ contract MerkleClaimTest is Test
     assertEq (wchi.balanceOf (alice), utxo0.amount);
 
     MerkleClaim.UtxoData memory utxo1 = TestData.getUtxo (1);
-    mc.testExecuteClaim (utxo1, TestData.getProof (1), alice);
-    assertEq (wchi.balanceOf (alice), utxo0.amount + utxo1.amount);
+    mc.testExecuteClaim (utxo1, TestData.getProof (1), bob);
+    assertEq (wchi.balanceOf (alice), utxo0.amount);
+    assertEq (wchi.balanceOf (bob), utxo1.amount);
 
     mc.testExecuteClaim (TestData.getUtxo (2), TestData.getProof (2), alice);
-    assertEq (wchi.balanceOf (alice), TestData.totalAmount);
+    assertEq (wchi.balanceOf (alice), TestData.totalAmount - utxo1.amount);
+    assertEq (wchi.balanceOf (bob), utxo1.amount);
     assertEq (wchi.balanceOf (address (mc)), 0);
   }
 
@@ -180,6 +190,28 @@ contract MerkleClaimTest is Test
 
     vm.expectPartialRevert (MerkleClaim.UtxoAlreadyClaimed.selector);
     mc.testExecuteClaim (utxo0, TestData.getProof (0), alice);
+  }
+
+  function test_batchCheckClaimed () public
+  {
+    MerkleClaim.UtxoData memory utxo0 = TestData.getUtxo (0);
+    MerkleClaim.UtxoData memory utxo1 = TestData.getUtxo (1);
+    MerkleClaim.UtxoData memory utxo2 = TestData.getUtxo (2);
+
+    mc.testExecuteClaim (utxo0, TestData.getProof (0), alice);
+    mc.testExecuteClaim (utxo2, TestData.getProof (2), bob);
+
+    MerkleClaim.UtxoIdentifier[] memory ids
+        = new MerkleClaim.UtxoIdentifier[] (3);
+    ids[0] = utxo0.id;
+    ids[1] = utxo1.id;
+    ids[2] = utxo2.id;
+
+    address[] memory claimed = mc.batchCheckClaimed (ids);
+    assertEq (claimed.length, 3);
+    assertEq (claimed[0], alice);
+    assertEq (claimed[1], address (0));
+    assertEq (claimed[2], bob);
   }
 
 }

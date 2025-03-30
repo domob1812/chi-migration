@@ -95,6 +95,17 @@ contract MerkleClaim
   }
 
   /**
+   * @dev Checks a batch of UTXOs to see if they have been claimed already.
+   */
+  function batchCheckClaimed (UtxoIdentifier[] calldata ids)
+      public view returns (address[] memory res)
+  {
+    res = new address[] (ids.length);
+    for (uint i = 0; i < ids.length; ++i)
+      res[i] = claimedOutputs[utxoHash (ids[i])];
+  }
+
+  /**
    * @dev Returns the leaf hash in our Merkle tree for the given UTXO.
    */
   function leafHash (UtxoData calldata utxo)
