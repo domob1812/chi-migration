@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// Copyright (C) 2024 The Xaya developers
+// Copyright (C) 2024-2025 The Xaya developers
 
 pragma solidity ^0.8.13;
 
@@ -13,9 +13,15 @@ contract TestToken is ERC20
 {
 
   constructor (uint supply)
-    ERC20 ("Wrapped CHI", "WCHI")
+    ERC20 ("Test Wrapped CHI", "TWCHI")
   {
     _mint (msg.sender, supply);
+  }
+
+  function decimals ()
+      public pure override returns (uint8)
+  {
+    return 8;
   }
 
 }
