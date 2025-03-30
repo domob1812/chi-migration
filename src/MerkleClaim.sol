@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// Copyright (C) 2024 The Xaya developers
+// Copyright (C) 2024-2025 The Xaya developers
 
 pragma solidity ^0.8.13;
 
@@ -15,10 +15,9 @@ contract MerkleClaim
 {
 
   /**
-   * @dev All data about a particular UTXO on the Xaya chain that is
-   * part of the claim.  This is the leaf data inside the Merkle tree.
+   * @dev The "identifier" (txid and vout) for a particular UTXO.
    */
-  struct UtxoData
+  struct UtxoIdentifier
   {
 
     /** @dev The txid on Xaya.  */
@@ -26,6 +25,18 @@ contract MerkleClaim
 
     /** @dev The vout value on Xaya.  */
     uint256 vout;
+
+  }
+
+  /**
+   * @dev All data about a particular UTXO on the Xaya chain that is
+   * part of the claim.  This is the leaf data inside the Merkle tree.
+   */
+  struct UtxoData
+  {
+
+    /** @dev The identifier of the UTXO.  */
+    UtxoIdentifier id;
 
     /** @dev The value of the output in sats.  */
     uint256 amount;
@@ -75,23 +86,23 @@ contract MerkleClaim
 
   /**
    * @dev Returns the "UTXO identifier hash" (txid and vout together)
-   * that is the key into claimdOutputs for the given UTXO.
+   * that is the key into claimedOutputs for the given UTXO.
    */
-  function utxoIdentifier (UtxoData calldata utxo)
-      private pure returns (bytes32)
+  function utxoHash (UtxoIdentifier calldata id)
+      public pure returns (bytes32)
   {
-    return keccak256 (abi.encodePacked (utxo.txid, utxo.vout));
+    return keccak256 (abi.encodePacked (id.txid, id.vout));
   }
 
   /**
    * @dev Returns the leaf hash in our Merkle tree for the given UTXO.
    */
   function leafHash (UtxoData calldata utxo)
-      private pure returns (bytes32)
+      public pure returns (bytes32)
   {
     return keccak256 (abi.encodePacked (
-      utxo.txid,
-      utxo.vout,
+      utxo.id.txid,
+      utxo.id.vout,
       utxo.amount,
       utxo.pubkeyhash
     ));
@@ -108,13 +119,13 @@ contract MerkleClaim
   function checkClaim (UtxoData calldata utxo, bytes32[] calldata merkleProof)
       public view
   {
-    bytes32 id = utxoIdentifier (utxo);
+    bytes32 id = utxoHash (utxo.id);
     address previousClaim = claimedOutputs[id];
     if (previousClaim != address (0))
-      revert UtxoAlreadyClaimed (utxo.txid, utxo.vout, previousClaim);
+      revert UtxoAlreadyClaimed (utxo.id.txid, utxo.id.vout, previousClaim);
 
     if (!MerkleProof.verifyCalldata (merkleProof, rootHash, leafHash (utxo)))
-      revert UtxoMerkleInvalid (utxo.txid, utxo.vout);
+      revert UtxoMerkleInvalid (utxo.id.txid, utxo.id.vout);
 
     /* Otherwise the claim is fine from what we can tell.  */
   }
@@ -131,10 +142,10 @@ contract MerkleClaim
     require (recipient != address (0), "invalid recipient address");
     checkClaim (utxo, merkleProof);
 
-    claimedOutputs[utxoIdentifier (utxo)] = recipient;
+    claimedOutputs[utxoHash (utxo.id)] = recipient;
     require (token.transfer (recipient, utxo.amount),
              "failed to transfer token for the claim");
-    emit Claimed (utxo.txid, utxo.vout, utxo.amount, recipient);
+    emit Claimed (utxo.id.txid, utxo.id.vout, utxo.amount, recipient);
   }
 
 }

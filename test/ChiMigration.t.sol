@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// Copyright (C) 2024 The Xaya developers
+// Copyright (C) 2024-2025 The Xaya developers
 
 pragma solidity ^0.8.13;
 
@@ -55,29 +55,33 @@ library TestData
   {
     if (ind == 0)
       return MerkleClaim.UtxoData (
-        hex"54cc0726bb4b9b6ea13f442011bc72c7b9cf5297c59ec24cb0421d3be0f5e701",
-        1,
+        MerkleClaim.UtxoIdentifier (
+          hex"54cc0726bb4b9b6ea13f442011bc72c7b9cf5297c59ec24cb0421d3be0f5e701",
+          1),
         1000,
         bytes20 (hex"0000000000000000000000000000000000000000")
       );
     if (ind == 1)
       return MerkleClaim.UtxoData (
-        hex"b9d964ea7b130ab3d691d99678da0cc8961ac5ca70e37e6fc6df4e9462360000",
-        0,
+        MerkleClaim.UtxoIdentifier (
+          hex"b9d964ea7b130ab3d691d99678da0cc8961ac5ca70e37e6fc6df4e9462360000",
+          0),
         2000,
         bytes20 (hex"d5f5d4f1e345e2751dd493c47cf8db64d1b7bf87")
       );
     if (ind == 2)
       return MerkleClaim.UtxoData (
-        hex"b9d964ea7b130ab3d691d99678da0cc8961ac5ca70e37e6fc6df4e9462360000",
-        1,
+        MerkleClaim.UtxoIdentifier (
+          hex"b9d964ea7b130ab3d691d99678da0cc8961ac5ca70e37e6fc6df4e9462360000",
+          1),
         3000,
         bytes20 (hex"e06abcaf02312af92516a11d2e131d3b6fa9fe68")
       );
     if (ind == 3)
       return MerkleClaim.UtxoData (
-        hex"b9d964ea7b130ab3d691d99678da0cc8961ac5ca70e37e6fc6df4e9462360000",
-        2,
+        MerkleClaim.UtxoIdentifier (
+          hex"b9d964ea7b130ab3d691d99678da0cc8961ac5ca70e37e6fc6df4e9462360000",
+          2),
         4000,
         bytes20 (hex"9fe6025e456877f43746f20d8707f1ab7d63e65c")
       );

@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// Copyright (C) 2024 The Xaya developers
+// Copyright (C) 2024-2025 The Xaya developers
 
 pragma solidity ^0.8.13;
 
@@ -95,7 +95,7 @@ contract ChiMigration is MerkleClaim, Ownable, EIP712
       public onlyOwner
   {
     if (uint160 (utxo.pubkeyhash) != 0)
-      revert WrongClaimProcess (utxo.txid, utxo.vout);
+      revert WrongClaimProcess (utxo.id.txid, utxo.id.vout);
 
     executeClaim (utxo, merkleProof, recipient);
   }
@@ -130,13 +130,13 @@ contract ChiMigration is MerkleClaim, Ownable, EIP712
       public
   {
     if (uint160 (utxo.pubkeyhash) == 0)
-      revert WrongClaimProcess (utxo.txid, utxo.vout);
+      revert WrongClaimProcess (utxo.id.txid, utxo.id.vout);
 
     /* Check that the public key provided matches the Xaya pubkey hash.  We
        try both compressed and uncompressed format.  */
     if (hashPubkey (pubkeyX, pubkeyY, true) != utxo.pubkeyhash
           && hashPubkey (pubkeyX, pubkeyY, false) != utxo.pubkeyhash)
-      revert InvalidClaimPubKey (utxo.txid, utxo.vout);
+      revert InvalidClaimPubKey (utxo.id.txid, utxo.id.vout);
 
     /* Derive the EVM address corresponding to this same public key.  */
     bytes32 keccakHash = keccak256 (abi.encodePacked (pubkeyX, pubkeyY));
@@ -145,8 +145,8 @@ contract ChiMigration is MerkleClaim, Ownable, EIP712
     /* Get EIP712 hash of the claim data.  */
     bytes memory body = abi.encode (
       keccak256 ("PubKeyClaim(bytes32 txid,uint256 vout,address recipient)"),
-      utxo.txid,
-      utxo.vout,
+      utxo.id.txid,
+      utxo.id.vout,
       recipient
     );
     bytes32 digest = _hashTypedDataV4 (keccak256 (body));
@@ -154,7 +154,7 @@ contract ChiMigration is MerkleClaim, Ownable, EIP712
     /* Check signature against the expected pubkey EVM address.  */
     address signer = ECDSA.recover (digest, signature);
     if (signer != evmAddr)
-      revert InvalidClaimSignature (utxo.txid, utxo.vout);
+      revert InvalidClaimSignature (utxo.id.txid, utxo.id.vout);
 
     executeClaim (utxo, merkleProof, recipient);
   }
