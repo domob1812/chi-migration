@@ -8,6 +8,7 @@ import sys
 import json
 import os
 from web3 import Web3
+from web3.middleware import ExtraDataToPOAMiddleware
 from snapshot import UtxoSet
 
 app = Flask(__name__)
@@ -190,12 +191,14 @@ def airdrop_claims():
 
 @app.route('/execute-claim', methods=['POST'])
 def execute_claim():
-    # Validate inputs
+    """Execute a token claim using the provided private key and recipient address."""
+    # Get form data
     private_key = request.form.get('private_key')
     claim_txid = request.form.get('claim_txid')
+    claim_vout = request.form.get('claim_vout', type=int)
     wallet_address = request.form.get('wallet_address')
     
-    # Check inputs
+    # Validate inputs
     if not wallet_address:
         return jsonify({
             'success': False, 
@@ -208,12 +211,111 @@ def execute_claim():
             'error': 'Private key is required'
         }), 400
     
-    # Mock claim execution verification
-    # In a real application, you'd validate the private key and claim details
-    return jsonify({
-        'success': True, 
-        'message': f'Claim for TXID {claim_txid} executed successfully to {wallet_address}!'
-    })
+    if not claim_txid:
+        return jsonify({
+            'success': False, 
+            'error': 'Claim TXID is missing'
+        }), 400
+    
+    if claim_vout is None:
+        return jsonify({
+            'success': False, 
+            'error': 'Claim vout is missing'
+        }), 400
+    
+    try:
+        # Find the output index in the UTXO set
+        txid_bytes = bytes.fromhex(claim_txid)
+        output_index = utxo_set.lookupOutput(txid_bytes, claim_vout)
+        
+        if output_index is None:
+            return jsonify({
+                'success': False,
+                'error': 'Output not found in UTXO set'
+            }), 404
+        
+        # Check if the output is already claimed
+        output = utxo_set.outputs[output_index]
+        output_identifier = (output['txid'], output['vout'])
+        is_claimed = batch_check_claimed([output])[output_identifier]
+        
+        if is_claimed:
+            return jsonify({
+                'success': False,
+                'error': 'This output has already been claimed'
+            }), 400
+        
+        # Get the Merkle proof for this output
+        merkle_proof = utxo_set.getProof(output_index)
+        
+        # Sign the claim using the private key
+        try:
+            chain_id = web3.eth.chain_id
+            contract_address = migration_contract.address
+            
+            x, y, signature = utxo_set.signClaim(
+                output_index, 
+                private_key, 
+                wallet_address, 
+                contract_address, 
+                chain_id
+            )
+            
+        except Exception as e:
+            return jsonify({
+                'success': False,
+                'error': f'Failed to sign claim: {str(e)}'
+            }), 400
+        
+        # Prepare the contract call
+        try:
+            # Structure the UTXO data as expected by the contract
+            utxo_data = {
+                'id': {
+                  'txid': output['txid'],
+                  'vout': output['vout'],
+                },
+                'amount': output['amount'],
+                'pubkeyhash': output['pubkeyhash']
+            }
+            
+            # Prepare transaction data for claimWithPubKey function
+            tx = migration_contract.functions.claimWithPubKey(
+                utxo_data,                 # UtxoData struct
+                merkle_proof,              # Merkle proof
+                wallet_address,            # recipient
+                x,                         # pubkeyX
+                y,                         # pubkeyY
+                signature                  # signature as bytes
+            ).build_transaction({
+                'from': wallet_address,
+                'gas': 200000,             # Gas limit
+                'nonce': web3.eth.get_transaction_count(wallet_address),
+            })
+            
+            # Return the transaction data to be signed by MetaMask in the frontend
+            return jsonify({
+                'success': True,
+                'transaction': {
+                    'to': tx['to'],
+                    'from': tx['from'],
+                    'data': tx['data'],
+                    'gas': tx['gas'],
+                    'amount': output['amount'] / 100000000,  # Convert to WCHI
+                }
+            })
+            
+        except Exception as e:
+            return jsonify({
+                'success': False,
+                'error': f'Error preparing transaction: {str(e)}'
+            }), 500
+            
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': f'Unexpected error: {str(e)}'
+        }), 500
 
 if __name__ == '__main__':
     # Set up command line argument parsing
@@ -232,6 +334,7 @@ if __name__ == '__main__':
     try:
         # Initialize Web3 connection
         web3 = Web3(Web3.HTTPProvider(args.rpc_url))
+        web3.middleware_onion.inject(ExtraDataToPOAMiddleware, layer=0)
         if not web3.is_connected():
             print(f"Error: Could not connect to Ethereum node at {args.rpc_url}", file=sys.stderr)
             sys.exit(1)
