@@ -321,8 +321,11 @@ if __name__ == '__main__':
     # Set up command line argument parsing
     parser = argparse.ArgumentParser(description='WCHI Token Airdrop Claims Application')
     parser.add_argument('--load', required=True, help='Path to the pickled UtxoSet file')
-    parser.add_argument('--rpc-url', required=True, help='Ethereum RPC endpoint URL')
+    parser.add_argument('--rpc-url', default='https://polygon-rpc.com', help='Ethereum RPC endpoint URL')
     parser.add_argument('--migration-contract', required=True, help='Migration contract address')
+    parser.add_argument('--host', default='127.0.0.1', help='Host to bind the server to (use 0.0.0.0 for Docker)')
+    parser.add_argument('--port', type=int, default=5000, help='Port to run the server on')
+    parser.add_argument('--production', action='store_true', help='Run in production mode (disables debug)')
     
     # Parse arguments
     args = parser.parse_args()
@@ -357,4 +360,12 @@ if __name__ == '__main__':
     print(f"Loaded UTXO set with {len(utxo_set.outputs)} outputs")
     print(f"Total claimable amount: {utxo_set.total}")
     
-    app.run(debug=True)
+    # Determine debug mode based on the production flag
+    debug_mode = not args.production
+    if args.production:
+        print(f"Running in PRODUCTION mode on {args.host}:{args.port}")
+    else:
+        print(f"Running in DEBUG mode on {args.host}:{args.port}")
+    
+    # Run the app with the specified host, port and debug settings
+    app.run(host=args.host, port=args.port, debug=debug_mode)
