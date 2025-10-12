@@ -1,0 +1,560 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>WCHI Token Airdrop Claims</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/web3@1.7.4/dist/web3.min.js"></script>
+    <script src="https://unpkg.com/htmx.org@1.9.10"></script>
+    <style>
+        .txid-mono {
+            font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
+            word-break: break-all;
+        }
+    </style>
+</head>
+<body class="bg-gray-100 min-h-screen flex items-center justify-center p-4">
+    <div class="w-full max-w-2xl">
+        <div class="bg-white shadow-md rounded-lg">
+            <div class="p-6">
+                <h1 class="text-2xl font-bold text-center mb-6">WCHI Token Airdrop Claims</h1>
+                
+                <!-- Address Input Form -->
+                <form method="POST" class="space-y-4">
+                    <input 
+                        type="text" 
+                        name="address" 
+                        placeholder="Enter Xaya Address" 
+                        value="{{ address }}"
+                        class="w-full px-3 py-2 border rounded-md"
+                    >
+                    <button 
+                        type="submit" 
+                        class="w-full bg-blue-500 text-white py-2 rounded-md hover:bg-blue-600 transition"
+                    >
+                        Check Availability
+                    </button>
+                </form>
+
+                <!-- No Claims Found Message -->
+                {% if no_claims_found %}
+                <div class="mt-4 text-center text-red-600 font-medium">
+                    No claims found for this address.
+                </div>
+                {% endif %}
+
+                <!-- Too Many Outputs Message -->
+                {% if too_many_outputs %}
+                <div class="mt-4 p-4 bg-yellow-50 border border-yellow-300 rounded-md">
+                    <p class="text-center text-yellow-800 font-medium">
+                        Too many outputs are associated to this address ({{ output_count }}). 
+                        Please use the command-line tools for the claim instead, or contact the Xaya team.
+                    </p>
+                </div>
+                {% endif %}
+
+                <!-- Claims List -->
+                {% if claims %}
+                <div class="mt-6">
+                    <h2 class="text-lg font-semibold mb-4">Available Claims</h2>
+                    
+                    <!-- Nonstandard warning message -->
+                    {% if has_nonstandard %}
+                    <div class="mb-4 p-3 bg-yellow-100 border border-yellow-400 text-yellow-700 rounded">
+                        <p>To claim outputs associated to this address, contact the Xaya team.</p>
+                    </div>
+                    {% endif %}
+                    
+                    <div class="space-y-2">
+                        {% for claim in claims %}
+                        <div 
+                            class="border rounded-md p-4 
+                                  {{ 'cursor-pointer hover:bg-gray-50 transition-colors claim-item bg-white' if not claim.get('claimed', False) and not has_nonstandard else 'bg-gray-200 opacity-50 cursor-not-allowed' }}"
+                            {% if not claim.get('claimed', False) and not has_nonstandard %}
+                            data-txid="{{ claim.txid.hex() }}"
+                            data-vout="{{ claim.vout }}"
+                            data-amount="{{ "%.8f"|format(claim.amount / 100000000) }}"
+                            {% endif %}
+                        >
+                            <div class="flex justify-between">
+                                <div class="w-full">
+                                    <p class="{{ 'text-xl font-bold text-green-600' if not claim.get('claimed', False) and not has_nonstandard else 'text-xl font-bold text-gray-500' }}">
+                                        {{ "%.8f"|format(claim.amount / 100000000) }} WCHI
+                                    </p>
+                                    <p class="text-sm {{ 'text-gray-600' if not claim.get('claimed', False) and not has_nonstandard else 'text-gray-500' }}">
+                                        <span class="txid-mono">{{ claim.txid.hex() }}:{{ claim.vout }}</span>
+                                    </p>
+                                    {% if claim.get('claimed', False) %}
+                                    <p class="text-sm text-red-500 mt-2">
+                                        Already Claimed
+                                    </p>
+                                    {% endif %}
+                                </div>
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                    
+                    <!-- Updated Totals Display -->
+                    <div class="mt-6 border-t pt-4 space-y-2">
+                        <!-- Claimable Total (Most Prominent) -->
+                        <div class="text-right">
+                            <span class="font-bold text-xl text-green-600">
+                                Claimable: {{ "%.8f"|format(total_claimable / 100000000) }} WCHI
+                            </span>
+                        </div>
+                        
+                        <!-- Already Claimed Total -->
+                        <div class="text-right text-sm text-gray-600">
+                            Already Claimed: {{ "%.8f"|format(total_claimed / 100000000) }} WCHI
+                        </div>
+                        
+                        <!-- All Claims Total -->
+                        <div class="text-right text-sm text-gray-600">
+                            Total (All Claims): {{ "%.8f"|format(total_all / 100000000) }} WCHI
+                        </div>
+                    </div>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+
+        <!-- Claim Modal -->
+        <div 
+            id="claimModal" 
+            class="fixed inset-0 bg-black bg-opacity-50 hidden items-center justify-center z-50"
+        >
+            <div class="bg-white rounded-lg p-6 w-full max-w-2xl relative">
+                <button 
+                    onclick="closeClaimModal()"
+                    class="absolute top-4 right-4 text-gray-600 hover:text-gray-900"
+                >
+                    ✕
+                </button>
+
+                <h2 class="text-xl font-bold mb-4">Claim Details</h2>
+                
+                <!-- Claim Information Display -->
+                <div id="claimInfo" class="mb-4">
+                    <p class="text-lg">
+                        <span class="font-bold text-green-600">
+                            <span id="claimAmount"></span> WCHI
+                        </span>
+                    </p>
+                    <p class="text-sm text-gray-600">
+                        <span id="claimTxid" class="txid-mono"></span>:<span id="claimVout"></span>
+                    </p>
+                </div>
+
+                <!-- Network Status Alert -->
+                <div id="networkAlert" class="mb-4 p-3 bg-yellow-100 border border-yellow-400 text-yellow-700 rounded hidden">
+                    <p>Please connect to the Polygon network to claim your tokens.</p>
+                    <button 
+                        id="switchNetworkBtn" 
+                        class="mt-2 bg-blue-500 text-white px-4 py-1 rounded-md hover:bg-blue-600 transition"
+                        onclick="switchToPolygonNetwork()"
+                    >
+                        Switch to Polygon
+                    </button>
+                </div>
+
+                <form id="claimForm" hx-post="/execute-claim" hx-target="#claimResult">
+                    <input type="hidden" name="claim_txid" id="formClaimTxid">
+                    <input type="hidden" name="claim_vout" id="formClaimVout">
+                    <input type="hidden" name="wallet_address" id="formWalletAddress">
+                    
+                    <div class="space-y-4">
+                        <!-- Private Key Input -->
+                        <div>
+                            <label class="block mb-2 text-sm font-medium">
+                                Private Key (WIF Format)
+                            </label>
+                            <input 
+                                type="text" 
+                                name="private_key"
+                                id="privateKeyInput"
+                                placeholder="Enter Private Key"
+                                class="w-full px-3 py-2 border rounded-md"
+                                required
+                            >
+                        </div>
+
+                        <!-- Wallet Connection -->
+                        <button 
+                            type="button" 
+                            id="connectWalletBtn"
+                            onclick="connectMetaMask()"
+                            class="w-full bg-blue-500 text-white py-2 rounded-md"
+                        >
+                            Connect MetaMask Wallet
+                        </button>
+
+                        <!-- Connected Wallet Address (Initially Hidden) -->
+                        <div 
+                            id="walletAddressDisplay" 
+                            class="text-sm text-gray-600 text-center hidden"
+                        >
+                            Receiving WCHI tokens to: <span id="walletAddress"></span>
+                        </div>
+
+                        <!-- Claim Button -->
+                        <button 
+                            type="submit" 
+                            id="executeClaimBtn"
+                            disabled 
+                            class="w-full bg-green-500 text-white py-2 rounded-md disabled:opacity-50"
+                        >
+                            Execute Claim
+                        </button>
+
+                        <!-- Result Display -->
+                        <div id="claimResult" class="mt-4"></div>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Global variables
+        let walletConnected = false;
+        let isPolygonNetwork = false;
+        
+        // Polygon network configuration
+        const POLYGON_CHAIN_ID = '0x89'; // 137 in decimal
+        const POLYGON_NETWORK = {
+            chainId: POLYGON_CHAIN_ID,
+            chainName: 'Polygon Mainnet',
+            nativeCurrency: {
+                name: 'MATIC',
+                symbol: 'MATIC',
+                decimals: 18
+            },
+            rpcUrls: ['https://polygon-rpc.com/'],
+            blockExplorerUrls: ['https://polygonscan.com/']
+        };
+
+        // Add click event listeners to claim items
+        document.addEventListener('DOMContentLoaded', () => {
+            document.querySelectorAll('.claim-item').forEach(item => {
+                item.addEventListener('click', function() {
+                    // Skip if the claim is already claimed or nonstandard
+                    if (this.classList.contains('cursor-not-allowed')) return;
+
+                    // Open modal and populate with claim details
+                    const txid = this.getAttribute('data-txid');
+                    const vout = this.getAttribute('data-vout');
+                    const amount = this.getAttribute('data-amount');
+
+                    // Update modal content
+                    document.getElementById('claimAmount').textContent = amount;
+                    document.getElementById('claimTxid').textContent = txid;
+                    document.getElementById('claimVout').textContent = vout;
+                    document.getElementById('formClaimTxid').value = txid;
+                    document.getElementById('formClaimVout').value = vout;
+
+                    // Show modal
+                    const claimModal = document.getElementById('claimModal');
+                    claimModal.classList.remove('hidden');
+                    claimModal.classList.add('flex');
+
+                    // Reset wallet connection state
+                    resetWalletConnection();
+                });
+            });
+
+            // Private key input listener
+            document.getElementById('privateKeyInput').addEventListener('input', checkClaimButtonState);
+        });
+
+        // Check if user is on Polygon network
+        async function checkNetwork() {
+            if (typeof window.ethereum === 'undefined') return false;
+            
+            try {
+                const chainId = await window.ethereum.request({ method: 'eth_chainId' });
+                isPolygonNetwork = chainId === POLYGON_CHAIN_ID;
+                
+                // Show/hide network alert
+                const networkAlert = document.getElementById('networkAlert');
+                if (isPolygonNetwork) {
+                    networkAlert.classList.add('hidden');
+                } else {
+                    networkAlert.classList.remove('hidden');
+                }
+                
+                return isPolygonNetwork;
+            } catch (error) {
+                console.error('Error checking network:', error);
+                return false;
+            }
+        }
+
+        // Switch to Polygon network
+        async function switchToPolygonNetwork() {
+            if (typeof window.ethereum === 'undefined') {
+                alert('MetaMask is not installed. Please install MetaMask to continue.');
+                return;
+            }
+
+            try {
+                // Try to switch to Polygon network
+                await window.ethereum.request({
+                    method: 'wallet_switchEthereumChain',
+                    params: [{ chainId: POLYGON_CHAIN_ID }]
+                });
+                
+                // Check if we're now on Polygon
+                await checkNetwork();
+                checkClaimButtonState();
+                
+            } catch (switchError) {
+                // This error code indicates that the chain has not been added to MetaMask
+                if (switchError.code === 4902) {
+                    try {
+                        // Add Polygon network
+                        await window.ethereum.request({
+                            method: 'wallet_addEthereumChain',
+                            params: [POLYGON_NETWORK]
+                        });
+                        
+                        // Check if we're now on Polygon
+                        await checkNetwork();
+                        checkClaimButtonState();
+                        
+                    } catch (addError) {
+                        console.error('Error adding Polygon network:', addError);
+                        alert('Failed to add Polygon network to MetaMask. Please add it manually.');
+                    }
+                } else {
+                    console.error('Error switching to Polygon network:', switchError);
+                    alert('Failed to switch to the Polygon network. Please switch manually in MetaMask.');
+                }
+            }
+        }
+
+        // MetaMask Wallet Connection
+        async function connectMetaMask() {
+            // Check if MetaMask is installed
+            if (typeof window.ethereum !== 'undefined') {
+                try {
+                    // Request account access
+                    const accounts = await window.ethereum.request({ 
+                        method: 'eth_requestAccounts' 
+                    });
+
+                    // Get the first account and convert to checksum address
+                    const rawWalletAddress = accounts[0];
+                    const checksummedWalletAddress = Web3.utils.toChecksumAddress(rawWalletAddress);
+
+                    // Check if on Polygon network
+                    await checkNetwork();
+                    
+                    // Update UI
+                    walletConnected = true;
+                    document.getElementById('connectWalletBtn').textContent = 'Wallet Connected';
+                    document.getElementById('connectWalletBtn').disabled = true;
+                    
+                    // Show wallet address with checksum format
+                    const walletDisplay = document.getElementById('walletAddressDisplay');
+                    const walletAddressSpan = document.getElementById('walletAddress');
+                    const formWalletAddress = document.getElementById('formWalletAddress');
+                    
+                    walletAddressSpan.textContent = checksummedWalletAddress;
+                    formWalletAddress.value = checksummedWalletAddress;
+                    walletDisplay.classList.remove('hidden');
+
+                    // Enable claim button if private key is entered and on correct network
+                    checkClaimButtonState();
+
+                } catch (error) {
+                    console.error('Failed to connect wallet:', error);
+                    alert('Failed to connect MetaMask. Please make sure it is installed and unlocked.');
+                }
+            } else {
+                // MetaMask not found
+                alert('MetaMask is not installed. Please install MetaMask to continue.');
+            }
+        }
+
+        // Close Modal Function
+        function closeClaimModal() {
+            const claimModal = document.getElementById('claimModal');
+            claimModal.classList.add('hidden');
+            claimModal.classList.remove('flex');
+            resetWalletConnection();
+        }
+
+        // Reset Wallet Connection
+        function resetWalletConnection() {
+            walletConnected = false;
+            isPolygonNetwork = false;
+            document.getElementById('connectWalletBtn').textContent = 'Connect MetaMask Wallet';
+            document.getElementById('connectWalletBtn').disabled = false;
+            document.getElementById('walletAddressDisplay').classList.add('hidden');
+            document.getElementById('executeClaimBtn').disabled = true;
+            document.getElementById('formWalletAddress').value = '';
+            document.getElementById('privateKeyInput').value = '';
+            document.getElementById('networkAlert').classList.add('hidden');
+        }
+
+        // Check Claim Button State
+        function checkClaimButtonState() {
+            const privateKey = document.getElementById('privateKeyInput').value;
+            const executeClaimBtn = document.getElementById('executeClaimBtn');
+            
+            executeClaimBtn.disabled = !(walletConnected && privateKey.trim() !== '' && isPolygonNetwork);
+        }
+
+        // HTMX afterSwap handler for transaction execution
+        document.addEventListener('htmx:afterSwap', function(event) {
+            if (event.detail.target.id === 'claimResult') {
+                const resultDiv = document.getElementById('claimResult');
+                
+                try {
+                    // Try to parse the content as JSON
+                    let jsonStr = resultDiv.innerText.trim();
+                    let response = JSON.parse(jsonStr);
+                    
+                    // Handle successful transaction case
+                    if (response.success && response.transaction) {
+                        console.log("Transaction data received:", response.transaction);
+                        
+                        // Clear the result div while we handle the transaction
+                        resultDiv.innerHTML = "<p class='text-blue-500'>Requesting transaction approval in MetaMask...</p>";
+                        
+                        // Check if still on Polygon network before sending
+                        checkNetwork().then(isPolygon => {
+                            if (!isPolygon) {
+                                resultDiv.innerHTML = `
+                                    <div class="p-4 bg-red-100 text-red-700 rounded-md">
+                                        <p>Please switch to the Polygon network before submitting the transaction.</p>
+                                        <button 
+                                            class="mt-2 bg-blue-500 text-white px-4 py-1 rounded-md hover:bg-blue-600 transition"
+                                            onclick="switchToPolygonNetwork()"
+                                        >
+                                            Switch to Polygon
+                                        </button>
+                                    </div>
+                                `;
+                                return;
+                            }
+                            
+                            // Send transaction through MetaMask
+                            window.ethereum.request({
+                                method: 'eth_sendTransaction',
+                                params: [{
+                                    to: response.transaction.to,
+                                    from: response.transaction.from,
+                                    data: response.transaction.data,
+                                    gas: Web3.utils.toHex(response.transaction.gas)
+                                }]
+                            })
+                            .then(function(txHash) {
+                                resultDiv.innerHTML = `
+                                    <div class="p-4 bg-green-100 text-green-700 rounded-md">
+                                        <p>Transaction submitted successfully!</p>
+                                        <p>Amount: ${response.transaction.amount} WCHI</p>
+                                        <p>Transaction Hash: <a href="https://polygonscan.com/tx/${txHash}" target="_blank" class="underline">${txHash}</a></p>
+                                        <p class="mt-2">Please wait for the transaction to be confirmed on the blockchain.</p>
+                                    </div>
+                                `;
+                            })
+                            .catch(function(error) {
+                                resultDiv.innerHTML = `
+                                    <div class="p-4 bg-red-100 text-red-700 rounded-md">
+                                        <p>Transaction failed: ${error.message}</p>
+                                    </div>
+                                `;
+                            });
+                        });
+                    } else if (!response.success) {
+                        // Handle error case
+                        resultDiv.innerHTML = `
+                            <div class="p-4 bg-red-100 text-red-700 rounded-md">
+                                <p>${response.error || 'Unknown error occurred'}</p>
+                            </div>
+                        `;
+                    }
+                } catch (error) {
+                    console.error("Error processing response:", error, "Content:", resultDiv.innerText);
+                    // If it's not JSON or there's an error parsing, leave as is or show an error
+                    if (!resultDiv.innerHTML.includes("<div class=")) {
+                        resultDiv.innerHTML = `
+                            <div class="p-4 bg-red-100 text-red-700 rounded-md">
+                                <p>Error processing response: ${error.message}</p>
+                            </div>
+                        `;
+                    }
+                }
+            }
+        });
+
+        // Add this new event listener for HTMX errors
+        document.addEventListener('htmx:responseError', function(event) {
+            if (event.detail.target.id === 'claimResult') {
+                const resultDiv = document.getElementById('claimResult');
+                
+                // Try to parse the response as JSON
+                try {
+                    const jsonStr = event.detail.xhr.responseText;
+                    const response = JSON.parse(jsonStr);
+                    
+                    if (response && response.error) {
+                        resultDiv.innerHTML = `
+                            <div class="p-4 bg-red-100 text-red-700 rounded-md">
+                                <p>Error: ${response.error}</p>
+                            </div>
+                        `;
+                    } else {
+                        resultDiv.innerHTML = `
+                            <div class="p-4 bg-red-100 text-red-700 rounded-md">
+                                <p>An error occurred during the claim process.</p>
+                                <p>Status: ${event.detail.xhr.status}</p>
+                            </div>
+                        `;
+                    }
+                } catch (error) {
+                    // If we can't parse the JSON, just show the raw response or a generic error
+                    resultDiv.innerHTML = `
+                        <div class="p-4 bg-red-100 text-red-700 rounded-md">
+                            <p>An error occurred during the claim process.</p>
+                            <p>Status: ${event.detail.xhr.status}</p>
+                        </div>
+                    `;
+                }
+            }
+        });
+
+        // Listen for account changes
+        if (typeof window.ethereum !== 'undefined') {
+            window.ethereum.on('accountsChanged', (accounts) => {
+                if (accounts.length === 0) {
+                    // User disconnected all accounts
+                    resetWalletConnection();
+                } else {
+                    // Reconnect with the new account
+                    connectMetaMask();
+                }
+            });
+            
+            // Listen for chain changes
+            window.ethereum.on('chainChanged', (chainId) => {
+                // Check if the new chain is Polygon
+                isPolygonNetwork = chainId === POLYGON_CHAIN_ID;
+                
+                // Update UI based on network status
+                const networkAlert = document.getElementById('networkAlert');
+                if (isPolygonNetwork) {
+                    networkAlert.classList.add('hidden');
+                } else {
+                    networkAlert.classList.remove('hidden');
+                }
+                
+                // Update claim button state
+                checkClaimButtonState();
+            });
+        }
+    </script>
+</body>
+</html>
