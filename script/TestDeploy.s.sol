@@ -27,7 +27,8 @@ contract TestDeployScript is Script
     ChiMigration mig = new ChiMigration (
         token,
         hex"11bdff58145ec24b3f552bbb1b98b1cfa9d10f6e02b7b7d305db3355b6825f1f");
-    token.transfer (address (mig), supply);
+    require (token.transfer (address (mig), supply),
+             "failed to send test tokens");
 
     vm.stopBroadcast ();
   }
