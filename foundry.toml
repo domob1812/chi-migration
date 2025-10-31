@@ -20,4 +20,4 @@ ignore = [
 ]
 
 [etherscan]
-polygon = { key = "${APIKEY}" }
+mainnet = { key = "${APIKEY}" }

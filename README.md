@@ -43,3 +43,6 @@ Xaya network, in output
 This output is excluded from the snapshot claim on Ethereum, so that
 the correct amount of WCHI will be circulating on Ethereum after the
 snapshot claim.
+
+The migration contract has been deployed at
+[**0x54BC5051C3a9AFFB78Be145Aa3D3D603F7892DED**](https://etherscan.io/address/0x54bc5051c3a9affb78be145aa3d3d603f7892ded).
