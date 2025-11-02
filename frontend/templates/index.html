@@ -148,13 +148,13 @@
 
                 <!-- Network Status Alert -->
                 <div id="networkAlert" class="mb-4 p-3 bg-yellow-100 border border-yellow-400 text-yellow-700 rounded hidden">
-                    <p>Please connect to the Polygon network to claim your tokens.</p>
+                    <p>Please connect to the Ethereum Mainnet to claim your tokens.</p>
                     <button 
                         id="switchNetworkBtn" 
                         class="mt-2 bg-blue-500 text-white px-4 py-1 rounded-md hover:bg-blue-600 transition"
-                        onclick="switchToPolygonNetwork()"
+                        onclick="switchToEthereumNetwork()"
                     >
-                        Switch to Polygon
+                        Switch to Ethereum
                     </button>
                 </div>
 
@@ -218,20 +218,20 @@
     <script>
         // Global variables
         let walletConnected = false;
-        let isPolygonNetwork = false;
+        let isEthereumNetwork = false;
         
-        // Polygon network configuration
-        const POLYGON_CHAIN_ID = '0x89'; // 137 in decimal
-        const POLYGON_NETWORK = {
-            chainId: POLYGON_CHAIN_ID,
-            chainName: 'Polygon Mainnet',
+        // Ethereum Mainnet network configuration
+        const ETHEREUM_CHAIN_ID = '0x1'; // 1 in decimal
+        const ETHEREUM_NETWORK = {
+            chainId: ETHEREUM_CHAIN_ID,
+            chainName: 'Ethereum Mainnet',
             nativeCurrency: {
-                name: 'MATIC',
-                symbol: 'MATIC',
+                name: 'Ether',
+                symbol: 'ETH',
                 decimals: 18
             },
-            rpcUrls: ['https://polygon-rpc.com/'],
-            blockExplorerUrls: ['https://polygonscan.com/']
+            rpcUrls: ['https://eth.llamarpc.com'],
+            blockExplorerUrls: ['https://etherscan.io/']
         };
 
         // Add click event listeners to claim items
@@ -267,44 +267,44 @@
             document.getElementById('privateKeyInput').addEventListener('input', checkClaimButtonState);
         });
 
-        // Check if user is on Polygon network
+        // Check if user is on Ethereum network
         async function checkNetwork() {
             if (typeof window.ethereum === 'undefined') return false;
             
             try {
                 const chainId = await window.ethereum.request({ method: 'eth_chainId' });
-                isPolygonNetwork = chainId === POLYGON_CHAIN_ID;
+                isEthereumNetwork = chainId === ETHEREUM_CHAIN_ID;
                 
                 // Show/hide network alert
                 const networkAlert = document.getElementById('networkAlert');
-                if (isPolygonNetwork) {
+                if (isEthereumNetwork) {
                     networkAlert.classList.add('hidden');
                 } else {
                     networkAlert.classList.remove('hidden');
                 }
                 
-                return isPolygonNetwork;
+                return isEthereumNetwork;
             } catch (error) {
                 console.error('Error checking network:', error);
                 return false;
             }
         }
 
-        // Switch to Polygon network
-        async function switchToPolygonNetwork() {
+        // Switch to Ethereum network
+        async function switchToEthereumNetwork() {
             if (typeof window.ethereum === 'undefined') {
                 alert('MetaMask is not installed. Please install MetaMask to continue.');
                 return;
             }
 
             try {
-                // Try to switch to Polygon network
+                // Try to switch to Ethereum network
                 await window.ethereum.request({
                     method: 'wallet_switchEthereumChain',
-                    params: [{ chainId: POLYGON_CHAIN_ID }]
+                    params: [{ chainId: ETHEREUM_CHAIN_ID }]
                 });
                 
-                // Check if we're now on Polygon
+                // Check if we're now on Ethereum
                 await checkNetwork();
                 checkClaimButtonState();
                 
@@ -312,23 +312,23 @@
                 // This error code indicates that the chain has not been added to MetaMask
                 if (switchError.code === 4902) {
                     try {
-                        // Add Polygon network
+                        // Add Ethereum network
                         await window.ethereum.request({
                             method: 'wallet_addEthereumChain',
-                            params: [POLYGON_NETWORK]
+                            params: [ETHEREUM_NETWORK]
                         });
                         
-                        // Check if we're now on Polygon
+                        // Check if we're now on Ethereum
                         await checkNetwork();
                         checkClaimButtonState();
                         
                     } catch (addError) {
-                        console.error('Error adding Polygon network:', addError);
-                        alert('Failed to add Polygon network to MetaMask. Please add it manually.');
+                        console.error('Error adding Ethereum network:', addError);
+                        alert('Failed to add Ethereum network to MetaMask. Please add it manually.');
                     }
                 } else {
-                    console.error('Error switching to Polygon network:', switchError);
-                    alert('Failed to switch to the Polygon network. Please switch manually in MetaMask.');
+                    console.error('Error switching to Ethereum network:', switchError);
+                    alert('Failed to switch to the Ethereum network. Please switch manually in MetaMask.');
                 }
             }
         }
@@ -388,7 +388,7 @@
         // Reset Wallet Connection
         function resetWalletConnection() {
             walletConnected = false;
-            isPolygonNetwork = false;
+            isEthereumNetwork = false;
             document.getElementById('connectWalletBtn').textContent = 'Connect MetaMask Wallet';
             document.getElementById('connectWalletBtn').disabled = false;
             document.getElementById('walletAddressDisplay').classList.add('hidden');
@@ -403,7 +403,7 @@
             const privateKey = document.getElementById('privateKeyInput').value;
             const executeClaimBtn = document.getElementById('executeClaimBtn');
             
-            executeClaimBtn.disabled = !(walletConnected && privateKey.trim() !== '' && isPolygonNetwork);
+            executeClaimBtn.disabled = !(walletConnected && privateKey.trim() !== '' && isEthereumNetwork);
         }
 
         // HTMX afterSwap handler for transaction execution
@@ -423,17 +423,17 @@
                         // Clear the result div while we handle the transaction
                         resultDiv.innerHTML = "<p class='text-blue-500'>Requesting transaction approval in MetaMask...</p>";
                         
-                        // Check if still on Polygon network before sending
-                        checkNetwork().then(isPolygon => {
-                            if (!isPolygon) {
+                        // Check if still on Ethereum network before sending
+                        checkNetwork().then(isEthereum => {
+                            if (!isEthereum) {
                                 resultDiv.innerHTML = `
                                     <div class="p-4 bg-red-100 text-red-700 rounded-md">
-                                        <p>Please switch to the Polygon network before submitting the transaction.</p>
+                                        <p>Please switch to the Ethereum Mainnet before submitting the transaction.</p>
                                         <button 
                                             class="mt-2 bg-blue-500 text-white px-4 py-1 rounded-md hover:bg-blue-600 transition"
-                                            onclick="switchToPolygonNetwork()"
+                                            onclick="switchToEthereumNetwork()"
                                         >
-                                            Switch to Polygon
+                                            Switch to Ethereum
                                         </button>
                                     </div>
                                 `;
@@ -455,7 +455,7 @@
                                     <div class="p-4 bg-green-100 text-green-700 rounded-md">
                                         <p>Transaction submitted successfully!</p>
                                         <p>Amount: ${response.transaction.amount} WCHI</p>
-                                        <p>Transaction Hash: <a href="https://polygonscan.com/tx/${txHash}" target="_blank" class="underline">${txHash}</a></p>
+                                        <p>Transaction Hash: <a href="https://etherscan.io/tx/${txHash}" target="_blank" class="underline">${txHash}</a></p>
                                         <p class="mt-2">Please wait for the transaction to be confirmed on the blockchain.</p>
                                     </div>
                                 `;
@@ -540,12 +540,12 @@
             
             // Listen for chain changes
             window.ethereum.on('chainChanged', (chainId) => {
-                // Check if the new chain is Polygon
-                isPolygonNetwork = chainId === POLYGON_CHAIN_ID;
+                // Check if the new chain is Ethereum
+                isEthereumNetwork = chainId === ETHEREUM_CHAIN_ID;
                 
                 // Update UI based on network status
                 const networkAlert = document.getElementById('networkAlert');
-                if (isPolygonNetwork) {
+                if (isEthereumNetwork) {
                     networkAlert.classList.add('hidden');
                 } else {
                     networkAlert.classList.remove('hidden');

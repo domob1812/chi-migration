@@ -321,7 +321,7 @@ if __name__ == '__main__':
     # Set up command line argument parsing
     parser = argparse.ArgumentParser(description='WCHI Token Airdrop Claims Application')
     parser.add_argument('--load', required=True, help='Path to the pickled UtxoSet file')
-    parser.add_argument('--rpc-url', default='https://polygon-rpc.com', help='Ethereum RPC endpoint URL')
+    parser.add_argument('--rpc-url', default='https://eth.llamarpc.com', help='Ethereum RPC endpoint URL')
     parser.add_argument('--migration-contract', required=True, help='Migration contract address')
     parser.add_argument('--host', default='127.0.0.1', help='Host to bind the server to (use 0.0.0.0 for Docker)')
     parser.add_argument('--port', type=int, default=5000, help='Port to run the server on')
