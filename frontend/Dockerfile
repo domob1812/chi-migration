@@ -18,7 +18,7 @@ FROM python:3.9-slim
 WORKDIR /app
 
 # Set build argument for CSV snapshot file path
-ARG SNAPSHOT_CSV=data/snapshot.csv
+ARG SNAPSHOT_CSV=data/prod-snapshot.csv
 
 # Install build dependencies for Python packages with native extensions
 RUN apt-get update && apt-get install -y --no-install-recommends \
